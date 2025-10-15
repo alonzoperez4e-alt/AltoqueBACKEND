@@ -1,0 +1,20 @@
+# Archivos y directorios generados por el IDE y herramientas de build
+.idea/
+.vscode/
+build/
+out/
+target/
+*.iml
+*.ipr
+*.iws
+
+# Archivos de configuración local y variables de entorno
+# ¡IMPORTANTE! Esto evita que tus secretos se suban a GitHub.
+.env
+
+# Logs
+*.log
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
