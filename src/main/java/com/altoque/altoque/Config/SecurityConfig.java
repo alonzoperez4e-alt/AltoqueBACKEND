@@ -54,7 +54,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cors = new CorsConfiguration();
-        cors.setAllowedOriginPatterns(List.of("https://altoque-frontend-4wpld56fn-laespigas-projects.vercel.app")); // tu frontend
+        cors.setAllowedOriginPatterns(List.of("https://altoque-frontend.vercel.app")); // tu frontend
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(List.of("*"));
         cors.setAllowCredentials(true);
