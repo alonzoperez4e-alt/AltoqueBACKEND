@@ -41,7 +41,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ✅ Habilitar CORS aquí
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**", "/api/clientes/**", "/api/notificaciones/**", "api/prestamos/**").permitAll()
+                        .requestMatchers("/auth/**", "/api/clientes/**", "/api/notificaciones/**", "/api/prestamos/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
@@ -54,7 +54,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cors = new CorsConfiguration();
-        cors.setAllowedOriginPatterns(List.of("https://altoque-frontend-oep9j9as0-laespigas-projects.vercel.app")); // tu frontend
+        cors.setAllowedOriginPatterns(List.of("https://altoque-frontend-8zum-4fviusn5j-laespigas-projects.vercel.app")); // tu frontend
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(List.of("*"));
         cors.setAllowCredentials(true);
