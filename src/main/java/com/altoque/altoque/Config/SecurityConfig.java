@@ -39,7 +39,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ✅ Habilitar CORS aquí
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ✅ CORS habilitado y configurado
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**", "/api/clientes/**", "/api/notificaciones/**", "/api/prestamos/**").permitAll()
                         .anyRequest().authenticated()
@@ -54,11 +54,21 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cors = new CorsConfiguration();
-        cors.setAllowedOriginPatterns(List.of("http://localhost/8081")); // tu frontend
+
+        // --- CORRECCIÓN ---
+        // Se cambiaron las barras '/' por dos puntos ':' para definir los puertos correctamente.
+        // Se añadieron múltiples orígenes comunes para desarrollo local (Vite suele usar 5173 por defecto).
+        cors.setAllowedOriginPatterns(List.of(
+                "http://localhost:8080",
+                "http://localhost:8081",
+                "http://localhost:5173",
+                "http://localhost:3000"
+        ));
+
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(List.of("*"));
         cors.setAllowCredentials(true);
-        cors.setExposedHeaders(List.of("Authorization")); // útil si tu frontend necesita leer el token
+        cors.setExposedHeaders(List.of("Authorization", "Content-Type")); // Headers expuestos al frontend
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cors);
