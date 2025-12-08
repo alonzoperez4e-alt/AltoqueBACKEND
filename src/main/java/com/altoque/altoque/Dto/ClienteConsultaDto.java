@@ -1,24 +1,30 @@
 package com.altoque.altoque.Dto;
 
-// Usamos Lombok para reducir el código boilerplate (getters, setters, etc.)
-// Asegúrate de tener la dependencia de Lombok en tu pom.xml
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data // Genera automáticamente getters, setters, toString, etc.
-@NoArgsConstructor // Genera un constructor sin argumentos
+@Data // Lombok genera getters, setters, toString, equals, hashCode automáticamente
+@NoArgsConstructor // Lombok genera un constructor vacío
 public class ClienteConsultaDto {
 
-    // Datos obtenidos de la API externa (apiPeru.dev)
+    // Identificación
+    private String tipo; // "NATURAL" o "JURIDICA"
+
+    // Datos Persona Natural (DNI)
     private String dniCliente;
     private String nombreCliente;
     private String apellidoCliente;
 
-    // Dato crucial obtenido de nuestra base de datos interna
+    // Datos Persona Jurídica (RUC)
+    private String ruc;
+    private String razonSocial;
+
+    // Estado del Cliente (Crucial para el Dashboard)
     private boolean tienePrestamoActivo;
 
-    // Constructor para facilitar la creación del DTO
+    // Constructor para Persona Natural (Compatibilidad con código existente)
     public ClienteConsultaDto(String dniCliente, String nombreCliente, String apellidoCliente, boolean tienePrestamoActivo) {
+        this.tipo = "NATURAL";
         this.dniCliente = dniCliente;
         this.nombreCliente = nombreCliente;
         this.apellidoCliente = apellidoCliente;

@@ -1,5 +1,6 @@
 package com.altoque.altoque.Service;
 
+import com.altoque.altoque.Dto.CuotaDto;
 import com.altoque.altoque.Dto.PrestamoDto;
 import com.altoque.altoque.Entity.Prestamo;
 import java.util.List;
@@ -16,4 +17,5 @@ public interface PrestamoService {
     List<Prestamo> buscarPorClienteId(Integer idCliente);
     List<Prestamo> buscarPorClienteDni(String dniCliente);
     List<Prestamo> buscarPorClienteDniYEstado(String dniCliente, String estado);
+    List<CuotaDto> obtenerCronograma(Integer idPrestamo);
 }

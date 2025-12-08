@@ -11,6 +11,8 @@ import org.apache.pdfbox.pdmodel.font.PDFont;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -472,58 +474,59 @@ public class DocumentoGenerator {
             float currentY = drawHeaderAndClientInfo(content, nombreCliente, monto, tasaAnual, meses);
 
             double tasaMensual = tasaAnual / 12 / 100;
-            double cuota = (monto * tasaMensual) / (1 - Math.pow(1 + tasaMensual, -meses));
-            double saldo = monto;
+            double cuota = round((monto * tasaMensual) / (1 - Math.pow(1 + tasaMensual, -meses)), 2);
+            double saldo = round(monto, 2);
 
             currentY = drawTableHeaders(content, currentY);
 
             double totalInteres = 0;
             double totalCapital = 0;
-            double totalCuotas = 0; // Variable para sumar el total de las cuotas
+            double totalCuotas = 0;
+
+            // Cuota redondeada fija para mostrar
+            double cuotaR = round(cuota, 2);
 
             for (int i = 1; i <= meses; i++) {
-                double interes = saldo * tasaMensual;
-                double capital = cuota - interes;
-                saldo -= capital;
+
+                double interes = round(saldo * tasaMensual, 2);
+                double capital = round(cuotaR - interes, 2);
+
+                // Ajuste solo al capital en la última cuota
+                if (i == meses) {
+                    capital = round(saldo, 2);
+                }
+
+                saldo = round(saldo - capital, 2);
 
                 totalInteres += interes;
                 totalCapital += capital;
-                totalCuotas += cuota; // Acumular el valor de cada cuota
+                totalCuotas += cuotaR; // Siempre la cuota redondeada fija
 
-                // --- LÓGICA DE PAGINACIÓN MEJORADA ---
+                // Paginación
                 if (currentY < MARGIN + ROW_HEIGHT) {
                     content.close();
                     page = new PDPage(PDRectangle.A4);
                     document.addPage(page);
                     content = new PDPageContentStream(document, page);
-                    currentY = A4_HEIGHT - MARGIN - 30; // Posición Y superior en nueva página
-                    currentY = drawTableHeaders(content, currentY); // Dibuja encabezados de nuevo
+                    currentY = A4_HEIGHT - MARGIN - 30;
+                    currentY = drawTableHeaders(content, currentY);
                 }
 
                 String[] rowData = {
                         String.valueOf(i),
                         LocalDate.now().plusMonths(i).format(DateTimeFormatter.ofPattern("dd/MM/yyyy")),
-                        String.format(Locale.US, "%.2f", cuota),
+                        String.format(Locale.US, "%.2f", cuotaR),
                         String.format(Locale.US, "%.2f", interes),
                         String.format(Locale.US, "%.2f", capital),
                         String.format(Locale.US, "%.2f", Math.max(saldo, 0))
                 };
+
                 currentY = drawTableRow(content, currentY, REGULAR_FONT, 10, rowData, false);
             }
 
-            // Dibuja la fila de totales con la suma de las cuotas
-            String[] totalsData = {
-                    "", "TOTALES",
-                    String.format(Locale.US, "%.2f", totalCuotas),
-                    String.format(Locale.US, "%.2f", totalInteres),
-                    String.format(Locale.US, "%.2f", totalCapital),
-                    ""
-            };
-            currentY = drawTableRow(content, currentY, BOLD_FONT, 10, totalsData, true); // Fila en negrita
-
-            // --- BLOQUE DE FIRMA MEJORADO ---
+            // --- Firma ---
             float signatureY = currentY - 80;
-            if (signatureY < MARGIN + 50) { // Si no hay espacio, nueva página para la firma
+            if (signatureY < MARGIN + 50) {
                 content.close();
                 page = new PDPage(PDRectangle.A4);
                 document.addPage(page);
@@ -542,10 +545,9 @@ public class DocumentoGenerator {
             content.newLineAtOffset(0, -20);
 
             float nameWidth = REGULAR_FONT.getStringWidth(nombreCliente) / 1000 * 12;
-            content.newLineAtOffset((signatureWidth - nameWidth)/2, 0);
+            content.newLineAtOffset((signatureWidth - nameWidth) / 2, 0);
             content.showText(nombreCliente);
             content.endText();
-
 
             content.close();
             document.save(out);
@@ -555,6 +557,14 @@ public class DocumentoGenerator {
             throw new RuntimeException("Error al generar el cronograma de pagos", e);
         }
     }
+
+
+    private static double round(double value, int places) {
+        return new BigDecimal(value)
+                .setScale(places, RoundingMode.HALF_UP)
+                .doubleValue();
+    }
+
 
     private static float drawHeaderAndClientInfo(PDPageContentStream content, String nombreCliente, double monto, double tasaAnual, int meses) throws IOException {
         float currentY = 780;

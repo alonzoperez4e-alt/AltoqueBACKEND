@@ -6,19 +6,29 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 public class ClienteDetalleDto {
-    // --- CAMBIO ---
-    // Se añade el ID del cliente. Será nulo para clientes nuevos
-    // y tendrá un valor para los ya existentes o recién guardados.
     private Integer idCliente;
 
+    // Identificación
+    private String tipo; // "NATURAL" o "JURIDICA" (Mapeado desde tipoCliente)
+    private boolean esNuevo;
+
+    // Natural
     private String dniCliente;
     private String nombreCliente;
     private String apellidoCliente;
-    private String fechaNacimiento; // Se mantiene como String para la comunicación
+    private String fechaNacimiento;
     private Boolean esPep;
+
+    // Jurídica
+    private String ruc;
+    private String razonSocial;
+    private String direccionFiscal;
+    private String fechaConstitucion;
+    private String representanteLegalDni;
+    private String representanteLegalNombre;
+
+    // Comunes
     private String correoCliente;
     private String telefonoCliente;
     private String direccionCliente;
-    private boolean esNuevo;
 }
-
