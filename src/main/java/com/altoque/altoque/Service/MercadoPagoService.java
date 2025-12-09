@@ -1,10 +1,7 @@
 package com.altoque.altoque.Service;
 
 import com.mercadopago.MercadoPagoConfig;
-import com.mercadopago.client.preference.PreferenceBackUrlsRequest;
-import com.mercadopago.client.preference.PreferenceClient;
-import com.mercadopago.client.preference.PreferenceItemRequest;
-import com.mercadopago.client.preference.PreferenceRequest;
+import com.mercadopago.client.preference.*;
 import com.mercadopago.exceptions.MPApiException;
 import com.mercadopago.exceptions.MPException;
 import com.mercadopago.resources.preference.Preference;
@@ -56,6 +53,7 @@ public class MercadoPagoService {
                 throw new IllegalArgumentException("El precio debe ser mayor a 0");
             }
 
+            // Item de la preferencia
             PreferenceItemRequest itemRequest = PreferenceItemRequest.builder()
                     .title(titulo)
                     .quantity(quantity)
@@ -66,24 +64,40 @@ public class MercadoPagoService {
             List<PreferenceItemRequest> items = new ArrayList<>();
             items.add(itemRequest);
 
+            // URLs de retorno
             PreferenceBackUrlsRequest backUrls = PreferenceBackUrlsRequest.builder()
                     .success(successUrl)
                     .failure(failureUrl)
                     .pending(pendingUrl)
                     .build();
 
+            // CONFIGURACIÓN DE MÉTODOS DE PAGO
+            // Esto permite especificar qué métodos aceptas
+            PreferencePaymentMethodsRequest paymentMethods = PreferencePaymentMethodsRequest.builder()
+                    .installments(1)  // Solo 1 cuota (pago único)
+                    .defaultInstallments(1)
+                    .build();
+
+            // Construir la preferencia
             PreferenceRequest preferenceRequest = PreferenceRequest.builder()
                     .items(items)
                     .backUrls(backUrls)
-                    .autoReturn("approved")  // ✅ HABILITADO para producción
+                    .autoReturn("approved")
                     .externalReference(idCuota)
                     .statementDescriptor("ALTOQUE")
+                    .paymentMethods(paymentMethods)  // ✅ Agregar configuración de pagos
+                    .binaryMode(false)  // false permite pagos pendientes (importante para Yape)
+                    .expires(true)  // La preferencia expira
+                    .expirationDateFrom(null)
+                    .expirationDateTo(null)
                     .build();
 
             PreferenceClient client = new PreferenceClient();
             Preference preference = client.create(preferenceRequest);
 
             System.out.println("✅ Preferencia creada exitosamente: " + preference.getId());
+            System.out.println("   Init Point: " + preference.getInitPoint());
+
             return preference.getId();
 
         } catch (MPApiException e) {
