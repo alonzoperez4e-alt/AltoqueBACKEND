@@ -238,4 +238,13 @@ public class ClienteServiceImpl implements ClienteService {
                 })
                 .doOnError(error -> log.error("Error en la consulta de DNI: {}", error.getMessage()));
     }
+
+    // NUEVO: Implementación de búsqueda
+    @Override
+    public List<Cliente> buscarClientes(String query) {
+        if (query == null || query.trim().length() < 2) {
+            return List.of(); // Retornar lista vacía si la query es muy corta
+        }
+        return clienteRepository.buscarClientes(query.trim());
+    }
 }

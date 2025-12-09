@@ -10,6 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/clientes")
 public class ClienteController {
@@ -68,5 +70,12 @@ public class ClienteController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al procesar la solicitud: " + e.getMessage());
         }
+    }
+
+
+    // NUEVO ENDPOINT DE BÚSQUEDA
+    @GetMapping("/buscar")
+    public ResponseEntity<List<Cliente>> buscarClientes(@RequestParam String query) {
+        return ResponseEntity.ok(clienteService.buscarClientes(query));
     }
 }

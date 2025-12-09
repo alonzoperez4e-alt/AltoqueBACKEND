@@ -17,6 +17,8 @@ public interface ClienteService {
     Cliente guardar (Cliente cliente); // Este se usará internamente
     boolean existePorDniCliente(String dniCliente);
     Mono<Cliente> consultarApiExternaAsync(String dni);
+    // NUEVO MÉTODO
+    List<Cliente> buscarClientes(String query);
 
     // --- NUEVOS MÉTODOS PARA LA LÓGICA DEL FORMULARIO ---
 
