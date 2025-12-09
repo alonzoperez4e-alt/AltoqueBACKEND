@@ -26,8 +26,9 @@ public class MercadoPagoController {
             System.out.println("   Préstamo ID: " + request.getPrestamoId());
             System.out.println("   Monto: " + request.getMonto());
             System.out.println("   Método: " + request.getMetodoPago());
+            System.out.println("   Descripción: " + request.getDescripcion());
 
-            // Validaciones básicas antes de llamar al servicio
+            // Validaciones
             if (request.getMonto() == null || request.getMonto().doubleValue() <= 0) {
                 Map<String, String> errorResponse = new HashMap<>();
                 errorResponse.put("error", "El monto debe ser mayor a 0");
@@ -40,14 +41,17 @@ public class MercadoPagoController {
                 return ResponseEntity.badRequest().body(errorResponse);
             }
 
-            // --- CORRECCIÓN AQUÍ ---
-            // Pasamos el objeto DTO completo directamente al servicio.
-            // El servicio ahora se encarga de extraer descripción, cliente, montos, etc.
-            PreferenceResponseDto response = mercadoPagoService.createPreference(request);
+            String preferenceId = mercadoPagoService.createPreference(
+                    request.getDescripcion(),
+                    1,
+                    request.getMonto(),
+                    request.getPrestamoId().toString()
+            );
 
-            System.out.println("✅ Preferencia creada con éxito. ID: " + response.getPreferenceId());
+            // Usar el DTO para la respuesta
+            PreferenceResponseDto response = new PreferenceResponseDto(preferenceId, "success");
 
-            // Retornamos directamente la respuesta del servicio (que ya contiene el ID y el initPoint)
+            System.out.println("✅ Respuesta enviada: " + preferenceId);
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
@@ -60,8 +64,7 @@ public class MercadoPagoController {
             System.err.println("❌ Error procesando solicitud: " + e.getMessage());
             e.printStackTrace();
             Map<String, String> errorResponse = new HashMap<>();
-            // El mensaje de la excepción ahora vendrá detallado desde el servicio (ej: "Error Mercado Pago: Invalid Payer")
-            errorResponse.put("error", e.getMessage());
+            errorResponse.put("error", "Error al crear preferencia de pago: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
