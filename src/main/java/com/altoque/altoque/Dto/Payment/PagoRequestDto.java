@@ -8,4 +8,5 @@ public class PagoRequestDto {
     private Integer prestamoId; // Integer
     private BigDecimal monto;
     private String metodoPago;
+    private String descripcion;
 }
