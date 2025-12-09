@@ -59,6 +59,7 @@ public class SecurityConfig {
         // Se cambiaron las barras '/' por dos puntos ':' para definir los puertos correctamente.
         // Se añadieron múltiples orígenes comunes para desarrollo local (Vite suele usar 5173 por defecto).
         cors.setAllowedOriginPatterns(List.of(
+                "https://altoque-frontend.vercel.app",
                 "http://localhost:8080",
                 "http://localhost:8081",
                 "http://localhost:5173",
