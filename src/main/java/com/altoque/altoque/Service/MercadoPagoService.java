@@ -52,7 +52,6 @@ public class MercadoPagoService {
             System.out.println("   Precio: " + precio);
             System.out.println("   ID Cuota: " + idCuota);
 
-            // Validaciones básicas
             if (precio == null || precio.compareTo(BigDecimal.ZERO) <= 0) {
                 throw new IllegalArgumentException("El precio debe ser mayor a 0");
             }
@@ -76,7 +75,7 @@ public class MercadoPagoService {
             PreferenceRequest preferenceRequest = PreferenceRequest.builder()
                     .items(items)
                     .backUrls(backUrls)
-                   //.autoReturn("approved")
+                    .autoReturn("approved")  // ✅ HABILITADO para producción
                     .externalReference(idCuota)
                     .statementDescriptor("ALTOQUE")
                     .build();
@@ -88,7 +87,6 @@ public class MercadoPagoService {
             return preference.getId();
 
         } catch (MPApiException e) {
-            // Error de la API de Mercado Pago
             System.err.println("❌ Error API Mercado Pago:");
             System.err.println("   Status Code: " + e.getStatusCode());
             System.err.println("   Message: " + e.getMessage());
@@ -98,13 +96,11 @@ public class MercadoPagoService {
             throw new RuntimeException("Error en API de Mercado Pago: " + e.getMessage(), e);
 
         } catch (MPException e) {
-            // Error general del SDK
             System.err.println("❌ Error SDK Mercado Pago: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException("Error en SDK de Mercado Pago: " + e.getMessage(), e);
 
         } catch (Exception e) {
-            // Cualquier otro error
             System.err.println("❌ Error inesperado creando preferencia: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException("Error creando preferencia: " + e.getMessage(), e);
