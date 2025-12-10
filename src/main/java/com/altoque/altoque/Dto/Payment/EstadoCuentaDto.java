@@ -8,7 +8,9 @@ import java.util.List;
 @Data
 public class EstadoCuentaDto {
     private Integer prestamoId; // Integer para coincidir con tu entidad
+    private String tipoCliente;
     private String clienteNombre;
+    private String razonSocial;
     private String documento;
     private BigDecimal deudaOriginalTotal;
     private BigDecimal deudaPendienteTotal;

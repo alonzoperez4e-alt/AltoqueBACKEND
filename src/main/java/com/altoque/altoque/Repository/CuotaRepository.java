@@ -12,6 +12,9 @@ public interface CuotaRepository extends JpaRepository<Cuota, Integer> {
     // Buscar todas las cuotas de un préstamo ordenadas por vencimiento
     List<Cuota> findByPrestamo_IdPrestamoOrderByNumeroCuotaAsc(Integer idPrestamo);
 
+    List<Cuota> findByPrestamoIdPrestamoAndEstado (Integer idPrestamo, String estado);
+
+    List<Cuota> findByPrestamo_IdPrestamo(Integer idPrestamo);
     // SOLUCIÓN FINAL: Usamos @Query para evitar la ambigüedad en la generación automática de nombres.
     // "c.prestamo.id" asume que en tu entidad Prestamo el campo @Id se llama "id".
     @Query("SELECT c FROM Cuota c WHERE c.prestamo.idPrestamo = :prestamoId")

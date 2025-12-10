@@ -51,7 +51,10 @@ public class OperacionesService {
         Cliente cliente = prestamo.getCliente();
 
         dto.setPrestamoId(prestamo.getIdPrestamo());
+        dto.setTipoCliente(cliente.getTipoCliente());
         dto.setClienteNombre(cliente.getNombreCliente() + " " + cliente.getApellidoCliente());
+        dto.setRazonSocial(cliente.getRazonSocial());
+
         dto.setDocumento(cliente.getDniCliente() != null ? cliente.getDniCliente() : cliente.getRuc());
 
         List<Cuota> cuotas = cuotaRepository.buscarPorPrestamoId(prestamo.getIdPrestamo());
