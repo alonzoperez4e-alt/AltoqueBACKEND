@@ -3,10 +3,11 @@ package com.altoque.altoque.Config;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
-import jakarta.annotation.PostConstruct; // Asegúrate de tener esta dependencia o usar javax.annotation
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails; // Importante
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -21,20 +22,16 @@ public class JwtUtil {
     @Value("${jwt.secret}")
     private String secret;
 
-    private final long EXPIRATION_TIME = 1000 * 60 * 60; // 1 hora
+    private final long EXPIRATION_TIME = 1000 * 60 * 60 * 10; // 10 horas (ajustado para operación bancaria estándar)
     private Key signingKey;
 
-    // Inicializamos la llave una sola vez después de que Spring inyecte el valor
     @PostConstruct
     public void init() {
         if (secret == null || secret.length() < 32) {
             logger.error("PELIGRO: La clave JWT es nula o muy corta. Verifica application.properties.");
             throw new IllegalArgumentException("La clave JWT debe tener al menos 32 caracteres.");
         }
-        // Logueamos (parcialmente oculto) para confirmar que se cargó la clave correcta
-        logger.info("JWT Secret cargado correctamente. Longitud: {}. Inicio: {}...",
-                secret.length(), secret.substring(0, 4));
-
+        logger.info("JWT Secret cargado correctamente.");
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -52,8 +49,13 @@ public class JwtUtil {
     }
 
     public String obtenerUsername(String token) {
-        // Limpieza defensiva del token por si viene con prefijo o comillas
         String cleanToken = limpiarToken(token);
+
+        // Validación estructural básica antes de parsear
+        if (cleanToken == null || cleanToken.isEmpty() || !cleanToken.contains(".")) {
+            // logger.warn("Intento de parsear token inválido o vacío");
+            return null; // Retornamos null para que el filtro lo maneje
+        }
 
         try {
             return Jwts.parserBuilder()
@@ -63,21 +65,28 @@ public class JwtUtil {
                     .getBody()
                     .getSubject();
         } catch (Exception e) {
-            logger.error("Error al obtener username del token: {}", e.getMessage());
-            throw e;
+            // No lanzamos la excepción aquí, dejamos que el filtro decida qué hacer
+            // logger.debug("Error extrayendo username: " + e.getMessage());
+            return null;
         }
     }
 
-    public boolean validarToken(String token) {
+    public boolean validarToken(String token, UserDetails userDetails) { // Firma ajustada para recibir UserDetails
         String cleanToken = limpiarToken(token);
+
+        if (cleanToken == null || cleanToken.isEmpty()) return false;
+
         try {
-            Jwts.parserBuilder()
+            Jws<Claims> claims = Jwts.parserBuilder()
                     .setSigningKey(getSigningKey())
                     .build()
                     .parseClaimsJws(cleanToken);
-            return true;
+
+            String username = claims.getBody().getSubject();
+            return (username.equals(userDetails.getUsername()) && !isTokenExpired(claims));
+
         } catch (SignatureException e) {
-            logger.error("Firma JWT inválida. ¿El token fue manipulado o cambió la clave secreta? Error: {}", e.getMessage());
+            logger.error("Firma JWT inválida: {}", e.getMessage());
         } catch (MalformedJwtException e) {
             logger.error("Token JWT mal formado: {}", e.getMessage());
         } catch (ExpiredJwtException e) {
@@ -90,6 +99,10 @@ public class JwtUtil {
         return false;
     }
 
+    private boolean isTokenExpired(Jws<Claims> claims) {
+        return claims.getBody().getExpiration().before(new Date());
+    }
+
     // Método auxiliar para limpiar errores comunes de frontend
     private String limpiarToken(String token) {
         if (token != null) {
@@ -99,8 +112,12 @@ public class JwtUtil {
             if (cleaned.startsWith("Bearer ")) {
                 cleaned = cleaned.substring(7);
             }
+            // Elimina cadena "null" literal
+            if ("null".equals(cleaned) || "undefined".equals(cleaned)) {
+                return null;
+            }
             return cleaned;
         }
-        return token;
+        return null;
     }
 }
