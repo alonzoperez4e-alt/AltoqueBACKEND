@@ -3,6 +3,7 @@ package com.altoque.altoque.Config;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -17,6 +18,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -31,20 +33,32 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        // Endpoints Públicos
-                        // Se agregan ambas variantes (/api/auth y /auth) por robustez
-                        .requestMatchers("/api/auth/**", "/auth/**").permitAll()
-                        .requestMatchers("/api/public/**").permitAll()
-
-                        // INTEGRACIÓN FLOW:
-                        // El webhook de confirmación DEBE ser público (Flow llama sin token)
-                        // Se agregan ambas variantes por robustez ante configuraciones de contexto
+                        // 1. REGLA CRÍTICA FLOW: El Webhook debe ser público SIEMPRE
                         .requestMatchers("/api/flow/confirm", "/flow/confirm").permitAll()
 
-                        // Endpoints de Error
-                        .requestMatchers("/error").permitAll()
+                        // 2. REGLA CRÍTICA FLOW: La creación y estado requieren usuario (Token)
+                        // Deben ir ANTES de los permitAll genéricos para que no se "cuelen" como públicos
+                        .requestMatchers("/api/flow/create", "/api/flow/status").authenticated()
 
-                        // Todo lo demás requiere autenticación (incluye /api/flow/create y /status)
+                        // 3. RESTAURACIÓN DE TUS RUTAS PÚBLICAS (Como lo tenías antes)
+                        .requestMatchers(
+                                "/auth/**",
+                                "/api/auth/**",
+                                "/api/clientes/**",
+                                "/api/notificaciones/**",
+                                "/api/prestamos/**",
+                                "/api/operaciones/**",
+                                "/api/pagos/**",
+                                "/api/caja/**",
+                                "/api/comprobantes/**",
+                                "/api/public/**",
+                                "/error"
+                        ).permitAll()
+
+                        // 4. Preflight requests (CORS) siempre permitidos
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // 5. Todo lo demás cerrado por defecto
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -55,24 +69,30 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        // IMPORTANTE: En producción, restringir a tu dominio frontend real.
-        // Para desarrollo/pruebas en Vercel, permitimos todo temporalmente para descartar errores de origen.
-        configuration.setAllowedOrigins(Arrays.asList("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
-        // Headers permitidos explícitamente para evitar bloqueos
-        configuration.setAllowedHeaders(Arrays.asList(
-                "Authorization",
-                "Content-Type",
-                "X-Requested-With",
-                "accept",
-                "Origin",
-                "Access-Control-Request-Method",
-                "Access-Control-Request-Headers"
+        CorsConfiguration cors = new CorsConfiguration();
+
+        // --- RESTAURACIÓN DE TU CONFIGURACIÓN CORS ---
+        // Esto soluciona los problemas de conexión con Vercel y Localhost
+        cors.setAllowedOriginPatterns(List.of(
+                "https://altoque-frontend.vercel.app", // Producción Frontend
+                "http://altoque-frontend.vercel.app", // Producción Frontend (http fallback)
+                "https://al-toque-d0b27cb5aec4.herokuapp.com", // Producción Backend (self)
+                "http://localhost:8080",
+                "http://localhost:8081",
+                "http://localhost:5173",
+                "http://localhost:3000"
+                // Nota: He removido "*" para mayor seguridad en producción,
+                // pero si tienes subdominios dinámicos podrías necesitarlo.
         ));
 
+        cors.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
+        cors.setAllowedHeaders(List.of("*")); // Permitir todos los headers
+        cors.setAllowCredentials(true); // Permitir credenciales/cookies
+
+        cors.setExposedHeaders(List.of("Authorization", "Content-Type", "Content-Disposition"));
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/**", cors);
         return source;
     }
 
