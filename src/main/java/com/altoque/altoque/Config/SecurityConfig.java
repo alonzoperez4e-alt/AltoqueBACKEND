@@ -1,4 +1,3 @@
-
 package com.altoque.altoque.Config;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,12 +32,14 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         // Endpoints Públicos
-                        .requestMatchers("/api/auth/**").permitAll()
+                        // Se agregan ambas variantes (/api/auth y /auth) por robustez
+                        .requestMatchers("/api/auth/**", "/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
 
                         // INTEGRACIÓN FLOW:
                         // El webhook de confirmación DEBE ser público (Flow llama sin token)
-                        .requestMatchers("/api/flow/confirm").permitAll()
+                        // Se agregan ambas variantes por robustez ante configuraciones de contexto
+                        .requestMatchers("/api/flow/confirm", "/flow/confirm").permitAll()
 
                         // Endpoints de Error
                         .requestMatchers("/error").permitAll()
