@@ -73,7 +73,7 @@ public class PdfComprobanteService {
         Cliente cliente = prestamo.getCliente();
 
         // Cálculos financieros seguros
-        BigDecimal total = BigDecimal.valueOf(pago.getMontoTotal()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal total = BigDecimal.valueOf(pago.getMonto()).setScale(2, RoundingMode.HALF_UP);
         BigDecimal divisor = BigDecimal.valueOf(1.18);
         BigDecimal gravada = total.divide(divisor, 2, RoundingMode.HALF_UP);
         BigDecimal igv = total.subtract(gravada);

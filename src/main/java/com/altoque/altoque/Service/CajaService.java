@@ -124,12 +124,12 @@ public class CajaService {
 
             dto.setType("PAGO"); // Por ahora solo registramos pagos
             dto.setMethod(pago.getMetodoPago());
-            dto.setSystemAmount(pago.getMontoTotal());
+            dto.setSystemAmount(pago.getMonto());
             dto.setRoundingAdjustment(pago.getAjusteRedondeo());
 
             // Calculamos el real: Sistema + Ajuste (Ej: 10.54 + (-0.04) = 10.50)
             // Solo sumamos ajuste si es efectivo, aunque logicamente en otros medios el ajuste es 0
-            dto.setRealAmount(pago.getMontoTotal() + (pago.getAjusteRedondeo() != null ? pago.getAjusteRedondeo() : 0.0));
+            dto.setRealAmount(pago.getMonto() + (pago.getAjusteRedondeo() != null ? pago.getAjusteRedondeo() : 0.0));
 
             return dto;
         }).collect(Collectors.toList());

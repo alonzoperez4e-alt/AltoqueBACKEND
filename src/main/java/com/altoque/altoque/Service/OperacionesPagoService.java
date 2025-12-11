@@ -1,6 +1,5 @@
 package com.altoque.altoque.Service;
 
-import com.altoque.altoque.Dto.Payment.EstadoCuentaDto;
 import com.altoque.altoque.Dto.Payment.PagoRequestDto;
 import com.altoque.altoque.Dto.Payment.PagoResponseDto;
 import com.altoque.altoque.Entity.*;
@@ -14,6 +13,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -35,70 +35,128 @@ public class OperacionesPagoService {
     @Autowired
     private CajaService cajaService;
 
-    // Constante de mora basada en tu código (1%)
     private static final BigDecimal MORA_PORCENTAJE = new BigDecimal("0.01");
 
+    /**
+     * Procesa un pago manual desde ventanilla (Efectivo/Otros).
+     * Busca la caja activa automáticamente.
+     */
     @Transactional
     public PagoResponseDto procesarPago(PagoRequestDto request, Integer userId) {
-        // --- 1. VALIDACIONES INICIALES Y CAJA ---
+        // 1. Validar Caja Abierta del usuario actual
         Caja cajaActual = cajaRepository.findByUsuario_IdUsuarioAndEstado(userId, "ABIERTA")
                 .orElseThrow(() -> new ApiServerException("No se puede procesar pagos sin una caja abierta."));
-
-        Prestamo prestamo = prestamoRepository.findById(request.getPrestamoId())
-                .orElseThrow(() -> new ApiServerException("Préstamo no encontrado"));
 
         Usuario usuario = usuarioRepository.findById(userId)
                 .orElseThrow(() -> new ApiServerException("Usuario no encontrado"));
 
-        // Validar monto positivo
-        if (request.getMonto().doubleValue() <= 0) {
-            throw new ApiServerException("El monto debe ser mayor a 0");
-        }
+        Prestamo prestamo = prestamoRepository.findById(request.getPrestamoId())
+                .orElseThrow(() -> new ApiServerException("Préstamo no encontrado"));
 
-        // --- 2. CÁLCULO DE MONTOS Y REDONDEO (Lógica de Caja) ---
-        // Monto Sistema: El valor exacto que el cliente quiere pagar de su deuda (ej: 10.54)
-        Double montoSistemaDouble = request.getMonto().doubleValue();
-
-        // Monto Real: Lo que entra físicamente a la caja (ej: 10.50 por redondeo)
-        Double montoRealCaja = montoSistemaDouble;
+        // Lógica de Redondeo (Solo Efectivo)
+        Double montoSistema = request.getMonto().doubleValue();
+        Double montoRealCaja = montoSistema;
         Double ajusteRedondeo = 0.0;
 
-        // Solo aplicamos redondeo si es Efectivo
         if ("EFECTIVO".equalsIgnoreCase(request.getMetodoPago())) {
-            // Regla Perú: Redondeo al 0.10 más cercano (o 0.05 según configuración, usaremos tu ejemplo 0.1)
-            BigDecimal bd = new BigDecimal(montoSistemaDouble).setScale(1, RoundingMode.HALF_UP);
+            BigDecimal bd = new BigDecimal(montoSistema).setScale(1, RoundingMode.HALF_UP);
             montoRealCaja = bd.doubleValue();
-            ajusteRedondeo = montoRealCaja - montoSistemaDouble;
+            ajusteRedondeo = montoRealCaja - montoSistema;
         }
 
-        // --- 3. LOGICA WATERFALL (Tu algoritmo de negocio) ---
-        // Usamos BigDecimal para la lógica precisa de amortización
-        BigDecimal dineroDisponibleParaDeuda = BigDecimal.valueOf(montoSistemaDouble);
+        String nroOperacion = UUID.randomUUID().toString(); // Generamos uno interno
 
-        List<Cuota> cuotas = cuotaRepository.findByPrestamo_IdPrestamo(prestamo.getIdPrestamo()); // Ajustado a JPA estándar
+        // Delegar al núcleo
+        return ejecutarLogicaPago(
+                prestamo,
+                usuario,
+                cajaActual,
+                montoSistema,
+                montoRealCaja,
+                ajusteRedondeo,
+                request.getMetodoPago(),
+                nroOperacion,
+                null // Sin orden externa
+        );
+    }
+
+    /**
+     * Procesa un pago confirmado por FLOW.
+     * Utiliza la caja y usuario específicos que iniciaron la transacción (Metadata).
+     */
+    @Transactional
+    public PagoResponseDto procesarPagoFlow(Integer prestamoId, Double monto, Integer cajaId, Integer userId, String flowOrder, String commerceOrder) {
+
+        Prestamo prestamo = prestamoRepository.findById(Math.toIntExact(prestamoId))
+                .orElseThrow(() -> new ApiServerException("Préstamo no encontrado (Flow)"));
+
+        Usuario usuario = usuarioRepository.findById(Math.toIntExact(userId))
+                .orElseThrow(() -> new ApiServerException("Usuario no encontrado (Flow)"));
+
+        Caja caja = cajaRepository.findById(cajaId)
+                .orElseThrow(() -> new ApiServerException("La caja asociada al pago Flow ya no existe o es inválida."));
+
+        // Validar si la caja sigue abierta?
+        // Depende de tu regla de negocio. Si el usuario cerró caja mientras el cliente pagaba,
+        // técnicamente entra en la siguiente o se reabre.
+        // Por ahora asumimos que entra en la caja que se indicó, aunque esté cerrada (auditoría posterior)
+        // O lanzamos error si es estricto.
+
+        // Para Flow no hay redondeo de efectivo
+        Double montoSistema = monto;
+        Double montoReal = monto;
+        Double ajuste = 0.0;
+
+        return ejecutarLogicaPago(
+                prestamo,
+                usuario,
+                caja,
+                montoSistema,
+                montoReal,
+                ajuste,
+                "FLOW",
+                flowOrder,
+                commerceOrder
+        );
+    }
+
+    /**
+     * NÚCLEO CENTRAL DE PAGO (Waterfall de Cuotas)
+     * Reutilizado para garantizar consistencia contable.
+     */
+    private PagoResponseDto ejecutarLogicaPago(
+            Prestamo prestamo,
+            Usuario usuario,
+            Caja caja,
+            Double montoSistema,
+            Double montoRealCaja,
+            Double ajusteRedondeo,
+            String metodoPago,
+            String nroOperacion,
+            String ordenExterna
+    ) {
+        if (montoSistema <= 0) throw new ApiServerException("El monto debe ser mayor a 0");
+
+        BigDecimal dineroDisponible = BigDecimal.valueOf(montoSistema);
+
+        // Obtener cuotas y ordenar
+        List<Cuota> cuotas = cuotaRepository.findByPrestamo_IdPrestamo(prestamo.getIdPrestamo());
         cuotas.sort(Comparator.comparingInt(Cuota::getNumeroCuota));
 
         List<String> coberturaLog = new ArrayList<>();
 
+        // --- LÓGICA DE AMORTIZACIÓN ---
         for (Cuota cuota : cuotas) {
-            if (dineroDisponibleParaDeuda.compareTo(BigDecimal.ZERO) <= 0) break;
+            if (dineroDisponible.compareTo(BigDecimal.ZERO) <= 0) break;
 
-            // Coversión segura para cálculos
             BigDecimal montoCuota = BigDecimal.valueOf(cuota.getMontoProgramado());
-            BigDecimal montoPagadoActual = cuota.getMontoPagado() != null
-                    ? BigDecimal.valueOf(cuota.getMontoPagado())
-                    : BigDecimal.ZERO;
-
+            BigDecimal montoPagadoActual = cuota.getMontoPagado() != null ? BigDecimal.valueOf(cuota.getMontoPagado()) : BigDecimal.ZERO;
             BigDecimal saldoCapital = montoCuota.subtract(montoPagadoActual);
 
-            // Limpieza de residuos decimales (tu lógica)
-            if (saldoCapital.abs().compareTo(new BigDecimal("0.001")) < 0) {
-                saldoCapital = BigDecimal.ZERO;
-            }
+            if (saldoCapital.abs().compareTo(new BigDecimal("0.001")) < 0) saldoCapital = BigDecimal.ZERO;
 
-            // Calcular Mora
+            // Mora
             BigDecimal moraCalculada = BigDecimal.ZERO;
-            // Nota: Agregué chequeo de estado != Pagado para no cobrar mora a cuotas ya pagadas
             if (!"PAGADO".equalsIgnoreCase(cuota.getEstado()) &&
                     cuota.getFechaVencimiento().isBefore(LocalDate.now()) &&
                     saldoCapital.compareTo(BigDecimal.ZERO) > 0) {
@@ -106,78 +164,69 @@ public class OperacionesPagoService {
             }
 
             BigDecimal deudaTotalCuota = saldoCapital.add(moraCalculada);
-
             if (deudaTotalCuota.compareTo(BigDecimal.ZERO) <= 0) continue;
 
-            // Aplicación del Pago
-            if (dineroDisponibleParaDeuda.compareTo(deudaTotalCuota) >= 0) {
-                // PAGO COMPLETO
-                cuota.setMontoPagado(montoCuota.doubleValue()); // Se guarda el monto original programado
-                // Aquí podrías guardar la mora pagada en otro campo si tuvieras 'interes_mora_pagado'
+            // Aplicar
+            if (dineroDisponible.compareTo(deudaTotalCuota) >= 0) {
+                // Pago Completo Cuota
+                cuota.setMontoPagado(montoCuota.doubleValue());
                 cuota.setInteresMora(moraCalculada.doubleValue());
                 cuota.setEstado("PAGADO");
 
-                dineroDisponibleParaDeuda = dineroDisponibleParaDeuda.subtract(deudaTotalCuota);
-                coberturaLog.add("Cuota " + cuota.getNumeroCuota() + " (Completa) - S/ " + deudaTotalCuota);
+                dineroDisponible = dineroDisponible.subtract(deudaTotalCuota);
+                coberturaLog.add("Cuota " + cuota.getNumeroCuota() + " (Completa)");
             } else {
-                // PAGO PARCIAL
-                BigDecimal pagoParaMora = dineroDisponibleParaDeuda.min(moraCalculada);
-                BigDecimal remanenteParaCapital = dineroDisponibleParaDeuda.subtract(pagoParaMora);
+                // Pago Parcial
+                BigDecimal pagoParaMora = dineroDisponible.min(moraCalculada);
+                BigDecimal remanenteParaCapital = dineroDisponible.subtract(pagoParaMora);
 
-                BigDecimal nuevoPagado = montoPagadoActual.add(remanenteParaCapital);
-
-                cuota.setMontoPagado(nuevoPagado.doubleValue());
-
-                // Actualizamos la mora generada en la entidad para que se refleje
-                cuota.setInteresMora(moraCalculada.doubleValue());
+                cuota.setMontoPagado(montoPagadoActual.add(remanenteParaCapital).doubleValue());
+                cuota.setInteresMora(moraCalculada.doubleValue()); // Nota: Esto asume que pagas la mora calculada hasta hoy
 
                 if (cuota.getFechaVencimiento().isBefore(LocalDate.now())) {
-                    cuota.setEstado("MORA ACTIVA"); // Estandarizando estado
+                    cuota.setEstado("MORA ACTIVA");
                 } else {
                     cuota.setEstado("ADELANTO");
                 }
 
-                coberturaLog.add("Cuota " + cuota.getNumeroCuota() + " (Parcial) - S/ " + dineroDisponibleParaDeuda);
-                dineroDisponibleParaDeuda = BigDecimal.ZERO;
+                coberturaLog.add("Cuota " + cuota.getNumeroCuota() + " (Parcial)");
+                dineroDisponible = BigDecimal.ZERO;
             }
             cuotaRepository.save(cuota);
         }
 
-        // --- 4. PERSISTENCIA DEL PAGO (Lo que faltaba) ---
+        // --- PERSISTENCIA DEL PAGO ---
         Pago nuevoPago = new Pago();
         nuevoPago.setPrestamo(prestamo);
         nuevoPago.setUsuario(usuario);
-        nuevoPago.setCaja(cajaActual);
-        nuevoPago.setFechaPago(LocalDateTime.now());
-        nuevoPago.setMontoTotal(montoSistemaDouble); // Guardamos que se pagó 10.54 de deuda
-        nuevoPago.setAjusteRedondeo(ajusteRedondeo); // Guardamos -0.04 de ajuste
-        nuevoPago.setMetodoPago(request.getMetodoPago());
-        nuevoPago.setTipoComprobante("TICKET");
-        nuevoPago.setNroOperacion(UUID.randomUUID().toString());
+        nuevoPago.setCaja(caja); // Vinculación crítica
+        nuevoPago.setFechaPago(LocalDateTime.now()); // Usar LocalDate para fecha
+        nuevoPago.setMonto(montoSistema);        // Monto Total deuda reducida
+        nuevoPago.setAjusteRedondeo(ajusteRedondeo);
+        nuevoPago.setMetodoPago(metodoPago);
+        nuevoPago.setTipoComprobante("TICKET"); // O FACTURA/BOLETA según cliente
+        nuevoPago.setNroOperacion(nroOperacion);
+        nuevoPago.setOrdenExterna(ordenExterna); // Guardamos LOAN-X-X
 
-        pagoRepository.save(nuevoPago);
+        Pago pagoGuardado = pagoRepository.save(nuevoPago);
 
-        // --- 5. ACTUALIZAR CAJA ---
-        // Registramos en caja: Si es efectivo entra el montoReal (10.50), si es digital entra todo (10.54)
-        boolean esEfectivo = "EFECTIVO".equalsIgnoreCase(request.getMetodoPago());
+        // --- ACTUALIZAR CAJA ---
+        boolean esEfectivo = "EFECTIVO".equalsIgnoreCase(metodoPago);
+        // Si es efectivo, entra montoReal (con redondeo). Si es digital, entra montoSistema exacto.
         cajaService.registrarMovimiento(
-                cajaActual,
-                esEfectivo ? montoRealCaja : montoSistemaDouble,
+                caja,
+                esEfectivo ? montoRealCaja : montoSistema,
                 ajusteRedondeo,
-                esEfectivo
+                esEfectivo // true=suma a efectivo, false=suma a digital
         );
 
-        // --- 6. PREPARAR RESPUESTA ---
+        // --- RESPUESTA ---
         PagoResponseDto response = new PagoResponseDto();
-        response.setIdPago(nuevoPago.getIdPago()); // Devolvemos el ID del pago real generado
+        response.setIdPago(pagoGuardado.getIdPago().intValue());
         response.setStatus("approved");
-        response.setMensaje("Pago procesado y registrado en caja.");
-        response.setMontoAplicado(BigDecimal.valueOf(montoSistemaDouble).subtract(dineroDisponibleParaDeuda));
+        response.setMensaje("Pago registrado correctamente en cuotas y caja.");
+        response.setMontoAplicado(BigDecimal.valueOf(montoSistema).subtract(dineroDisponible));
         response.setDetallesCobertura(coberturaLog);
-
-        // Recalcular estado de cuenta (puedes extraer este método del servicio antiguo o implementarlo aquí)
-        // Por ahora devolvemos null o calculamos básico, idealmente reusa tu lógica de EstadoCuenta
-        // response.setDeudaRestante(...);
 
         return response;
     }
